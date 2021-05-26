@@ -1,21 +1,35 @@
-import handler from "./libs/handler-lib";
-import dynamoDb from "./libs/dynamodb-lib";
+import * as uuid from "uuid";
+import AWS from "aws-sdk";
 
-export const main = handler(async (event, context) => {
+const dynamoDb = new AWS.DynamoDB.DocumentClient();
+
+export async function main(event, context) {
+  // Request body is passed in as a JSON encoded string in 'event.body'
+  const data = JSON.parse(event.body);
+
   const params = {
     TableName: process.env.tableName,
-    // 'Key' defines the partition key and sort key of the item to be retrieved
-    Key: {
+    Item: {
+      // The attributes of the item to be created
       userId: "123", // The id of the author
-      noteId: event.pathParameters.id, // The id of the note from the path
+      noteId: uuid.v1(), // A unique uuid
+      content: data.content, // Parsed from request body
+      attachment: data.attachment, // Parsed from request body
+      createdAt: Date.now(), // Current Unix timestamp
     },
   };
 
-  const result = await dynamoDb.get(params);
-  if (!result.Item) {
-    throw new Error("Item not found.");
-  }
+  try {
+    await dynamoDb.put(params).promise();
 
-  // Return the retrieved item
-  return result.Item;
-});
+    return {
+      statusCode: 200,
+      body: JSON.stringify(params.Item),
+    };
+  } catch (e) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: e.message }),
+    };
+  }
+}
